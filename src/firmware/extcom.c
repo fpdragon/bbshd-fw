@@ -496,8 +496,9 @@ static int8_t process_bafang_display_read_battery()
 
 	uint8_t value = motor_get_battery_voltage_x10() / 10;
 
-	// should be in percent but can't be bottered to do SOC calculation.
-	// return in volts instead, i.e. 57% on display will correspond to 57V.
+	/*				   min voltage  max voltage */
+	value = MAP(value, 45,			61,			0, 100);
+
 	uart1_write(value);
 	uart1_write(value); // checksum
 
