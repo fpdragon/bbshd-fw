@@ -57,7 +57,8 @@ void throttle_init(__xdata uint16_t min_mv, __xdata uint16_t max_mv)
 
 bool throttle_ok()
 {
-	return throttle_low_ok && throttle_hard_ok;
+	return true;
+	//return throttle_low_ok && throttle_hard_ok;
 }
 
 uint8_t throttle_read()

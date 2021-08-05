@@ -16,6 +16,13 @@
 #include "uart.h"
 #include "eventlog.h"
 #include "util.h"
+#include "system.h"
+
+
+/* motor power ramp up defines */
+#define RAMP_UP_MS		3000
+#define RAMP_UP_STEPS	100
+
 
 static __xdata uint8_t assist_level;
 static __xdata uint8_t operation_mode;
@@ -32,6 +39,17 @@ static __xdata bool cruise_block_throttle_return;
 static __xdata int8_t last_temperature;
 static __xdata bool speed_limiting;
 
+/* motor power ramp up variables */
+static __xdata uint8_t ramp_up_last_target_current = 0;
+static __xdata uint16_t ramp_up_time_overflow_ms = 0;
+static __xdata uint16_t execution_periode_ms = 0;
+
+
+
+/* variable holds the time stamp of the last get_main_loop_periode_ms() execution */
+/* code should work about 49 days until this variable wraps */
+static __xdata uint32_t last_run_ms = 0;
+
 
 #define MAX_TEMPERATURE						70
 #define CRUISE_ENGAGE_PAS_PULSES			12
@@ -42,6 +60,8 @@ void apply_cruise(uint8_t* target_current, uint8_t throtle_percent);
 void apply_throttle(uint8_t* target_current, uint8_t throttle_percen);
 void apply_speed_limit(uint8_t* target_current);
 void apply_thermal_limit(uint8_t* target_current);
+void apply_ramp_up_limit(uint8_t* target_current);
+void get_main_loop_periode_ms(void);
 
 void reload_assist_params();
 
@@ -68,6 +88,10 @@ void app_process()
 {
 	uint8_t target_current = 0;
 
+
+	/* get the time elapsed since last execution */
+	get_main_loop_periode_ms();
+
 	if (assist_level == ASSIST_PUSH)
 	{
 		if (g_config.use_push_walk)
@@ -88,15 +112,89 @@ void app_process()
 	apply_thermal_limit(&target_current);
 
 	motor_set_target_speed(255u * assist_level_data.max_cadence_percent / 100u);
-	motor_set_target_current(target_current);
 	
-	if (target_current > 0 && !brake_is_activated() && !gear_sensor_is_activated())
+	apply_ramp_up_limit(&target_current);
+
+	motor_set_target_current(target_current);
+
+	/* enable / disable the motor depending on different inputs */
+	/* brake sensor */
+	if (false != brake_is_activated())
 	{
-		motor_enable();
+		/* reset the current ramp up */
+		ramp_up_last_target_current = 0;
+		/* disable motor */
+		motor_disable();
 	}
+	/* shift sensor */
+	else if (false != shift_sensor_is_activated())
+	{
+		/* no ramp up reset for shift sensor */
+
+		/* disable motor */
+		motor_disable();
+	}
+	/* current limitation */
+	else if (0 >= target_current)
+	{
+		/* reset the current ramp up */
+		ramp_up_last_target_current = 0;
+		/* disable motor */
+		motor_disable();
+	}
+	/* common motor run situation */
 	else
 	{
-		motor_disable();
+		/* enable motor */
+		motor_enable();
+	}
+}
+
+
+/* This function tracks the global ms time counter and calculates the delta time from the last call.
+ * It shall be called in app_process() one time per loop iteration */
+void get_main_loop_periode_ms(void)
+{
+	uint32_t now_ms;
+
+	now_ms = system_ms();
+
+	/* first run is ignored and returns the default value 0 */
+	if (0 != last_run_ms)
+	{
+		execution_periode_ms = (uint16_t)(now_ms - last_run_ms);
+	}
+
+	last_run_ms = now_ms;
+}
+
+
+/* This functions implements the motor power ramp up limitation.
+ * It uses the time_elapsed_ms input to get the time delay from the last execution iteration.
+ * Depending on this value the number of percentage steps are calculated that are allowed to be risen. */
+void apply_ramp_up_limit(uint8_t* target_current)
+{
+	uint8_t max_steps_per;
+
+	/* if the ramp up configuration time is 0 then this should prevent a div0 exception */
+	if (0 < RAMP_UP_MS)
+	{
+		/* calculate the maximum percentage steps that can be made in this loop iteration */
+		max_steps_per = (uint8_t)((uint32_t)(execution_periode_ms + ramp_up_time_overflow_ms) * RAMP_UP_STEPS / RAMP_UP_MS);
+
+		/* calculate the rest time that was not considered in this loop iteration */
+		/* will be saved to a member variable and added in next iteration */
+		ramp_up_time_overflow_ms = execution_periode_ms + ramp_up_time_overflow_ms - ((RAMP_UP_MS / RAMP_UP_STEPS) * (uint16_t)max_steps_per);
+
+		/* if the new current exceeds the last value plus a limit */
+		if (*target_current > (ramp_up_last_target_current + max_steps_per))
+		{
+			/* then limit the current */
+			*target_current = ramp_up_last_target_current + max_steps_per;
+		}
+		
+		/* save the target_current for next iteration */
+		ramp_up_last_target_current = *target_current;
 	}
 }
 
@@ -184,7 +282,7 @@ uint8_t app_get_status_code()
 		return STATUS_ERROR_LVC;
 	}
 
-	if (brake_is_activated() || gear_sensor_is_activated())
+	if (brake_is_activated() || shift_sensor_is_activated())
 	{
 		return STATUS_BRAKING;
 	}
@@ -222,7 +320,7 @@ void apply_cruise(uint8_t* target_current, uint8_t throttle_percent)
 	if ((assist_level_data.flags & ASSIST_FLAG_CRUISE) && throttle_ok())
 	{
 		// pause cruise if brake activated
-		if (brake_is_activated())
+		if (brake_is_activated() || shift_sensor_is_activated())
 		{
 			cruise_paused = true;
 			cruise_block_throttle_return = true;
@@ -303,15 +401,15 @@ void apply_speed_limit(uint8_t* target_current)
 		{
 			if (current_speed_rpm_x10 > high_limit_rpm)
 			{
-				if (*target_current > 1)
+				if (*target_current > 0)
 				{
-					*target_current = 1;
+					*target_current = 0;
 				}
 			}
 			else
 			{
 				// linear ramp down when approaching max speed.
-				uint8_t tmp = (uint8_t)MAP(current_speed_rpm_x10, low_limit_rpm, high_limit_rpm, *target_current, 1);
+				uint8_t tmp = (uint8_t)MAP(current_speed_rpm_x10, low_limit_rpm, high_limit_rpm, *target_current, 0);
 				if (*target_current > tmp)
 				{
 					*target_current = tmp;

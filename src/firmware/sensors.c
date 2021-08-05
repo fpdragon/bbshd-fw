@@ -35,6 +35,8 @@ static __xdata uint16_t speed_period_counter;
 static __xdata bool speed_prev_state;
 static __xdata uint8_t speed_ticks_per_rpm;
 
+static __xdata uint32_t last_shift_time_ms = 0;
+
 
 void sensors_init()
 {
@@ -53,7 +55,7 @@ void sensors_init()
 	SET_PIN_INPUT(PIN_PAS2);
 	SET_PIN_INPUT(PIN_SPEED_SENSOR);
 	SET_PIN_INPUT(PIN_BRAKE);
-	SET_PIN_INPUT(PIN_GEAR_SENSOR);
+	SET_PIN_INPUT(PIN_SHIFT_SENSOR);
 
 	pas_prev1 = GET_PIN_STATE(PIN_PAS1);
 	pas_prev2 = GET_PIN_STATE(PIN_PAS2);
@@ -138,7 +140,27 @@ bool brake_is_activated()
 
 bool gear_sensor_is_activated()
 {
-	return !GET_PIN_STATE(PIN_GEAR_SENSOR);
+	return !GET_PIN_STATE(PIN_SHIFT_SENSOR);
+}
+
+
+bool shift_sensor_is_activated()
+{
+	uint32_t now_ms = system_ms();
+
+	if (false == GET_PIN_STATE(PIN_SHIFT_SENSOR))
+	{
+		last_shift_time_ms = now_ms;
+		return true;
+	}
+	else if (now_ms < last_shift_time_ms + 700)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 
