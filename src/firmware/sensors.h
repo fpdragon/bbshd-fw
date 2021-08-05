@@ -30,6 +30,7 @@ uint16_t speed_sensor_get_rpm_x10();
 int8_t temperature_read();
 
 bool brake_is_activated();
+bool shift_sensor_is_activated();
 
 
 INTERRUPT(isr_timer4, IRQ_TIMER4);

@@ -34,6 +34,8 @@ static __xdata uint16_t speed_period_counter;
 static __xdata bool speed_prev_state;
 static __xdata uint8_t speed_ticks_per_rpm;
 
+static __xdata uint32_t last_shift_time_ms = 0;
+
 
 void sensors_init()
 {
@@ -151,6 +153,26 @@ int8_t temperature_read()
 bool brake_is_activated()
 {
 	return !GET_PIN_STATE(PIN_BRAKE);
+}
+
+
+bool shift_sensor_is_activated()
+{
+	uint32_t now_ms = system_ms();
+
+	if (false == GET_PIN_STATE(PIN_SHIFT_SENSOR))
+	{
+		last_shift_time_ms = now_ms;
+		return true;
+	}
+	else if (now_ms < last_shift_time_ms + 700)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 
