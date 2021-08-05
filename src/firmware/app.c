@@ -38,11 +38,16 @@ static __xdata bool cruise_block_throttle_return;
 static __xdata uint8_t last_temperature;
 static __xdata bool speed_limiting;
 
-/* motor power ramp up variables */
-static __xdata uint8_t ramp_up_last_target_current = 0;
-static __xdata uint16_t ramp_up_time_overflow_ms = 0;
-static __xdata uint16_t execution_periode_ms = 0;
+/* execution time measurement */
+static __xdata uint16_t execution_periode_ms;
 
+/* motor power ramp up variables */
+static __xdata uint8_t ramp_up_last_target_current;
+static __xdata uint16_t ramp_up_time_overflow_ms;
+
+/* soft low voltage protection */
+static __xdata uint8_t soft_low_voltage_protection_per;
+static __xdata uint16_t soft_low_voltage_overflow_ms;
 
 
 /* variable holds the time stamp of the last get_main_loop_periode_ms() execution */
@@ -59,6 +64,7 @@ void apply_throttle(uint8_t* target_current, uint8_t throttle_percen);
 void apply_speed_limit(uint8_t* target_current);
 void apply_thermal_limit(uint8_t* target_current);
 void apply_ramp_up_limit(uint8_t* target_current);
+void apply_soft_low_voltage_protection(uint8_t* target_current);
 void get_main_loop_periode_ms(void);
 
 void reload_assist_params();
@@ -69,13 +75,21 @@ void app_init()
 {
 	motor_disable();
 
-	last_light_state = false;
-	last_temperature = 0;
-	speed_limiting = false;
+	execution_periode_ms			= 0;
 
-	cruise_paused = true;
-	cruise_block_throttle_return = false;
-	operation_mode = OPERATION_MODE_DEFAULT;
+	ramp_up_last_target_current		= 0;
+	ramp_up_time_overflow_ms		= 0;
+
+	soft_low_voltage_protection_per = 100;
+	soft_low_voltage_overflow_ms	= 0;
+
+	last_light_state				= false;
+	last_temperature				= 0;
+	speed_limiting					= false;
+
+	cruise_paused					= true;
+	cruise_block_throttle_return	= false;
+	operation_mode					= OPERATION_MODE_DEFAULT;
 	app_set_wheel_max_speed_rpm(convert_wheel_speed_kph_to_rpm(g_config.max_speed_kph));
 	app_set_assist_level(g_config.assist_startup_level);
 	reload_assist_params();
@@ -114,6 +128,9 @@ void app_process()
 
 	/* apply the motor power ramp up limitation */
 	apply_ramp_up_limit(&target_current);
+
+	/* apply the soft low voltage protection limitation */
+	apply_soft_low_voltage_protection(&target_current);
 
 	motor_set_target_current(target_current);
 
@@ -196,6 +213,54 @@ void apply_ramp_up_limit(uint8_t* target_current)
 		/* save the target_current for next iteration */
 		ramp_up_last_target_current = *target_current;
 	}
+}
+
+
+
+/* This functions implements a SW version of an overvoltage protection.
+ * It uses a similar step calculation like the function apply_ramp_up_limit().
+ * If an undervoltage is detected then the calculation steps in and reduces the
+ * variable soft_low_voltage_protection_per. This variable may reduces the target_current. */
+void apply_soft_low_voltage_protection(uint8_t* target_current)
+{
+	uint8_t steps_per;
+
+	/* this code only gets active if the motor is enabled */
+	if (0 >= *target_current)
+	{
+		return;
+	}
+
+	/* if an undervoltage is detected then lower the power limit by 1 percent */
+	if ((motor_get_battery_voltage_x10() / 10) < g_config.low_cut_off_V)
+	{
+		/* calculate the maximum percentage steps that can be made in this loop iteration */
+		steps_per = (uint8_t)((uint32_t)(execution_periode_ms + soft_low_voltage_overflow_ms) * RAMP_UP_STEPS / RAMP_UP_MS);
+
+		/* calculate the rest time that was not considered in this loop iteration */
+		/* will be saved to a member variable and added in next iteration */
+		soft_low_voltage_overflow_ms = execution_periode_ms + soft_low_voltage_overflow_ms - ((RAMP_UP_MS / RAMP_UP_STEPS) * (uint16_t)steps_per);
+
+		/* calc the new protection limit */
+		if (soft_low_voltage_protection_per > steps_per)
+		{
+			/* lower the power to protect the battery */
+			soft_low_voltage_protection_per = soft_low_voltage_protection_per - steps_per;
+		}
+		else
+		{
+			/* battery empty stop all motor activity*/
+			soft_low_voltage_protection_per = 0;
+		}
+	}
+	else
+	{
+		/* if the voltage is still fine then we reset the control that calculates the reduction steps */
+		soft_low_voltage_overflow_ms = 0;
+	}
+
+	/* apply the protection limit */
+	*target_current = MIN(*target_current, soft_low_voltage_protection_per);
 }
 
 
