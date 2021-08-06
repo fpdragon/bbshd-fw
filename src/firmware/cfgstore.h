@@ -12,6 +12,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+
+/* debug switch to show a 8bit value as the battery bar on the display */
+/* comment the following line for production build */
+#define DEBUG_WITH_DISPLAY
+
+
 #define ASSIST_FLAG_PAS					0x01
 #define ASSIST_FLAG_THROTTLE			0x02
 #define ASSIST_FLAG_CRUISE				0x04

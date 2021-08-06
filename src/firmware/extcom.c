@@ -479,13 +479,23 @@ static int8_t process_bafang_display_read_current()
 		return KEEP;
 	}
 
-	uint8_t amp_x2 = (uint8_t)(motor_get_battery_current_x10() * 2) / 10;
+	uint8_t amp_x2 = (uint8_t)(motor_get_battery_current_x10() /* * 2 */) / 10;
 
 	uart1_write(amp_x2);
 	uart1_write(amp_x2); // checksum
 
 	return 2;
 }
+
+
+#ifdef DEBUG_WITH_DISPLAY
+static __xdata int8_t debug_value = 0;
+void set_debug_value(uint8_t value)
+{
+	debug_value = value;
+}
+#endif
+
 
 static int8_t process_bafang_display_read_battery()
 {
@@ -494,12 +504,17 @@ static int8_t process_bafang_display_read_battery()
 		return KEEP;
 	}
 
+#ifdef DEBUG_WITH_DISPLAY
+	uart1_write(debug_value);
+	uart1_write(debug_value); // checksum
+#else
 	uint8_t value = motor_get_battery_voltage_x10() / 10;
 
 	// should be in percent but can't be bottered to do SOC calculation.
 	// return in volts instead, i.e. 57% on display will correspond to 57V.
 	uart1_write(value);
 	uart1_write(value); // checksum
+#endif
 
 	return 2;
 }

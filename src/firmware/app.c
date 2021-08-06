@@ -21,6 +21,7 @@
 #include "eventlog.h"
 #include "util.h"
 #include "system.h"
+#include "extcom.h"
 
 /*
  * DEFINES
@@ -203,6 +204,10 @@ void get_main_loop_periode_ms(void)
 	{
 		execution_periode_ms = (uint16_t)(now_ms - last_run_ms);
 	}
+
+#ifdef DEBUG_WITH_DISPLAY
+	set_debug_value((uint8_t)(execution_periode_ms));
+#endif
 
 	last_run_ms = now_ms;
 }
