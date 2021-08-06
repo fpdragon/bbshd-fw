@@ -31,7 +31,7 @@
  /* motor power ramp up defines */
 #define RAMP_UP_MS					3000
 /* soft low voltage ramp down time constant */
-#define SOFT_LOW_VOLTAGE_TIME_MS	10000
+#define SOFT_LOW_VOLTAGE_TIME_MS	1000
 
 #define MAX_TEMPERATURE						70
 #define CRUISE_ENGAGE_PAS_PULSES			12
