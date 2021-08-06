@@ -6,6 +6,10 @@
  * Released under the GPL License, Version 3
  */
 
+ /*
+  * INCLUDES
+  */
+
 #include "app.h"
 #include "stc15.h"
 #include "cfgstore.h"
@@ -18,11 +22,24 @@
 #include "util.h"
 #include "system.h"
 
+/*
+ * DEFINES
+ */
 
-/* motor power ramp up defines */
-#define RAMP_UP_MS		3000
-#define RAMP_UP_STEPS	100
+/* target_current maximum value */
+#define TARGET_CURRENT_MAX			100
+ /* motor power ramp up defines */
+#define RAMP_UP_MS					3000
+/* soft low voltage ramp down time constant */
+#define SOFT_LOW_VOLTAGE_TIME_MS	10000
 
+#define MAX_TEMPERATURE						70
+#define CRUISE_ENGAGE_PAS_PULSES			12
+#define SPEED_LIMIT_RAMP_DOWN_INTERVAL_KPH	2
+
+/*
+ * MEMBER VARIABLES
+ */
 
 static __xdata uint8_t assist_level;
 static __xdata uint8_t operation_mode;
@@ -49,14 +66,13 @@ static __xdata uint16_t ramp_up_time_overflow_ms;
 static __xdata uint8_t soft_low_voltage_protection_per;
 static __xdata uint16_t soft_low_voltage_overflow_ms;
 
-
 /* variable holds the time stamp of the last get_main_loop_periode_ms() execution */
 /* code should work about 49 days until this variable wraps */
 static __xdata uint32_t last_run_ms = 0;
 
-
-#define MAX_TEMPERATURE					70
-#define CRUISE_ENGAGE_PAS_PULSES		12
+/*
+ * FUNCTION PROTOTYPES
+ */
 
 void apply_pas(uint8_t* target_current);
 void apply_cruise(uint8_t* target_current, uint8_t throtle_percent);
@@ -71,10 +87,15 @@ void reload_assist_params();
 
 uint16_t convert_wheel_speed_kph_to_rpm(uint8_t speed_kph);
 
+/*
+ * FUNCTION BODIES
+ */
+
 void app_init()
 {
 	motor_disable();
 
+	/* init all member variables */
 	execution_periode_ms			= 0;
 
 	ramp_up_last_target_current		= 0;
@@ -90,6 +111,7 @@ void app_init()
 	cruise_paused					= true;
 	cruise_block_throttle_return	= false;
 	operation_mode					= OPERATION_MODE_DEFAULT;
+
 	app_set_wheel_max_speed_rpm(convert_wheel_speed_kph_to_rpm(g_config.max_speed_kph));
 	app_set_assist_level(g_config.assist_startup_level);
 	reload_assist_params();
@@ -197,11 +219,11 @@ void apply_ramp_up_limit(uint8_t* target_current)
 	if (0 < RAMP_UP_MS)
 	{
 		/* calculate the maximum percentage steps that can be made in this loop iteration */
-		max_steps_per = (uint8_t)((uint32_t)(execution_periode_ms + ramp_up_time_overflow_ms) * RAMP_UP_STEPS / RAMP_UP_MS);
+		max_steps_per = (uint8_t)((uint32_t)(execution_periode_ms + ramp_up_time_overflow_ms) * TARGET_CURRENT_MAX / RAMP_UP_MS);
 
 		/* calculate the rest time that was not considered in this loop iteration */
 		/* will be saved to a member variable and added in next iteration */
-		ramp_up_time_overflow_ms = execution_periode_ms + ramp_up_time_overflow_ms - ((RAMP_UP_MS / RAMP_UP_STEPS) * (uint16_t)max_steps_per);
+		ramp_up_time_overflow_ms = execution_periode_ms + ramp_up_time_overflow_ms - ((RAMP_UP_MS / TARGET_CURRENT_MAX) * (uint16_t)max_steps_per);
 
 		/* if the new current exceeds the last value plus a limit */
 		if (*target_current > (ramp_up_last_target_current + max_steps_per))
@@ -235,11 +257,11 @@ void apply_soft_low_voltage_protection(uint8_t* target_current)
 	if ((motor_get_battery_voltage_x10() / 10) < g_config.low_cut_off_V)
 	{
 		/* calculate the maximum percentage steps that can be made in this loop iteration */
-		steps_per = (uint8_t)((uint32_t)(execution_periode_ms + soft_low_voltage_overflow_ms) * RAMP_UP_STEPS / RAMP_UP_MS);
+		steps_per = (uint8_t)((uint32_t)(execution_periode_ms + soft_low_voltage_overflow_ms) * TARGET_CURRENT_MAX / SOFT_LOW_VOLTAGE_TIME_MS);
 
 		/* calculate the rest time that was not considered in this loop iteration */
 		/* will be saved to a member variable and added in next iteration */
-		soft_low_voltage_overflow_ms = execution_periode_ms + soft_low_voltage_overflow_ms - ((RAMP_UP_MS / RAMP_UP_STEPS) * (uint16_t)steps_per);
+		soft_low_voltage_overflow_ms = execution_periode_ms + soft_low_voltage_overflow_ms - ((SOFT_LOW_VOLTAGE_TIME_MS / TARGET_CURRENT_MAX) * (uint16_t)steps_per);
 
 		/* calc the new protection limit */
 		if (soft_low_voltage_protection_per > steps_per)
