@@ -192,16 +192,16 @@ static void load_default_config()
 {
 	g_config.use_freedom_units = 0;
 
-	g_config.max_current_amps = 30;
-	g_config.low_cut_off_V = 42;
+	g_config.max_current_amps = 15;
+	g_config.low_cut_off_V = 45;
 
 	g_config.use_speed_sensor = 1;
 	g_config.use_display = 1;
 	g_config.use_push_walk = 1;
 
-	g_config.wheel_size_inch_x10 = 280;
+	g_config.wheel_size_inch_x10 = 290;
 	g_config.speed_sensor_signals = 1;
-	g_config.max_speed_kph = 60;
+	g_config.max_speed_kph = 32;
 
 	g_config.pas_start_delay_pulses = 5;
 	g_config.pas_stop_delay_x10ms = 20;
@@ -215,12 +215,15 @@ static void load_default_config()
 
 	memset(&g_config.assist_levels, 0, 20 * sizeof(assist_level_t));
 
-	static __xdata uint8_t current_limits[9] = { 25, 34, 43, 51, 60, 68, 74, 82, 90 };
+	//uint8_t current_limits_arr[9] = { 25, 34, 43, 51, 60, 68, 74, 82, 90 };
+	__xdata uint8_t current_limits_arr[9] = { 10, 20, 30, 40, 50, 60, 80, 90, 100 };
+	__xdata uint8_t max_speed_percent_arr[9] = { 40, 45, 57, 65, 70, 77, 85, 93, 100 };
 	for (uint8_t i = 0; i < 9; ++i)
 	{
-		g_config.assist_levels[0][i+1].flags = ASSIST_FLAG_PAS | ASSIST_FLAG_THROTTLE;
-		g_config.assist_levels[0][i+1].target_current_percent = current_limits[i];
-		g_config.assist_levels[0][i+1].max_speed_percent = 100;
-		g_config.assist_levels[0][i+1].max_throttle_current_percent = 100;
+		g_config.assist_levels[0][i + 1].flags = ASSIST_FLAG_PAS /* | ASSIST_FLAG_THROTTLE*/;
+		g_config.assist_levels[0][i + 1].target_current_percent = current_limits_arr[i];
+		//g_config.assist_levels[0][i + 1].max_speed_percent = 100;
+		g_config.assist_levels[0][i + 1].max_speed_percent = max_speed_percent_arr[i];
+		g_config.assist_levels[0][i + 1].max_throttle_current_percent = 100;
 	}
 }
