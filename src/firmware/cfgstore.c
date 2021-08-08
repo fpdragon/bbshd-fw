@@ -215,11 +215,12 @@ static void load_default_config()
 
 	memset(&g_config.assist_levels, 0, 20 * sizeof(assist_level_t));
 
-	static __xdata uint8_t current_limits[9] = { 25, 34, 43, 51, 60, 68, 74, 82, 90 };
+	__xdata uint8_t current_limits[9] = { 25, 34, 43, 51, 60, 68, 74, 82, 90 };
 	for (uint8_t i = 0; i < 9; ++i)
 	{
 		g_config.assist_levels[0][i+1].flags = ASSIST_FLAG_PAS | ASSIST_FLAG_THROTTLE;
 		g_config.assist_levels[0][i+1].target_current_percent = current_limits[i];
+		g_config.assist_levels[0][i+1].max_cadence_percent = 100;
 		g_config.assist_levels[0][i+1].max_speed_percent = 100;
 		g_config.assist_levels[0][i+1].max_throttle_current_percent = 100;
 	}

@@ -18,11 +18,15 @@ namespace BBSFW.Model
 		private const int EVT_ERROR_INIT_MOTOR =				64;
 		private const int EVT_ERROR_CHANGE_TARGET_SPEED =		65;
 		private const int EVT_ERROR_CHANGE_TARGET_CURRENT =		66;
-		private const int EVT_ERROR_CONFIG_READ_EEPROM =		67;
-		private const int EVT_ERROR_CONFIG_WRITE_EEPROM =		68;
-		private const int EVT_ERROR_CONFIG_ERASE_EEPROM =		69;
-		private const int EVT_ERROR_CONFIG_VERSION =			70;
-		private const int EVT_ERROR_CONFIG_CHECKSUM =			71;
+		private const int EVT_ERROR_READ_MOTOR_STATUS =			67;
+		private const int EVT_ERROR_READ_MOTOR_CURRENT =		68;
+		private const int EVT_ERROR_READ_MOTOR_VOLTAGE =		69;
+
+		private const int EVT_ERROR_CONFIG_READ_EEPROM =		70;
+		private const int EVT_ERROR_CONFIG_WRITE_EEPROM =		71;
+		private const int EVT_ERROR_CONFIG_ERASE_EEPROM =		72;
+		private const int EVT_ERROR_CONFIG_VERSION =			73;
+		private const int EVT_ERROR_CONFIG_CHECKSUM =			74;
 
 		private const int EVT_DATA_TARGET_CURRENT =				128;
 		private const int EVT_DATA_TARGET_SPEED =				129;
@@ -36,6 +40,7 @@ namespace BBSFW.Model
 		private const int EVT_DATA_SPEED_LIMITING =				137;
 		private const int EVT_DATA_MAX_CURRENT_ADC_REQUEST =	138;
 		private const int EVT_DATA_MAX_CURRENT_ADC_RESPONSE =	139;
+		private const int EVT_DATA_MAIN_LOOP_TIME =				140;
 
 
 		public enum LogLevel
@@ -91,6 +96,12 @@ namespace BBSFW.Model
 					return "Failed to set motor target current on motor controller.";
 				case EVT_ERROR_CHANGE_TARGET_SPEED:
 					return "Failed to set motor target speed on motor controller.";
+				case EVT_ERROR_READ_MOTOR_STATUS:
+					return "Failed to read status from motor controller.";
+				case EVT_ERROR_READ_MOTOR_CURRENT:
+					return "Failed to read current from motor controller.";
+				case EVT_ERROR_READ_MOTOR_VOLTAGE:
+					return "Failed to read voltage from motor controller.";
 				case EVT_ERROR_CONFIG_READ_EEPROM:
 					return "Failed to read config from eeprom.";
 				case EVT_ERROR_CONFIG_WRITE_EEPROM:
@@ -142,6 +153,8 @@ namespace BBSFW.Model
 					return $"Requesting to configure max current on motor controller mcu, adc={_data}.";
 				case EVT_DATA_MAX_CURRENT_ADC_RESPONSE:
 					return $"Max current configured on motor controller mcu, response was adc={_data}.";
+				case EVT_DATA_MAIN_LOOP_TIME:
+					return $"Main loop, interval={_data}ms."; 
 			}
 
 			if (_data.HasValue)

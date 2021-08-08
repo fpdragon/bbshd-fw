@@ -80,17 +80,21 @@ namespace BBSFW.Model
 		{
 			var result = new List<ComPort>();
 
-			using (var searcher = new ManagementObjectSearcher("SELECT * FROM WIN32_SerialPort"))
+			using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%COM%'"))
 			{
 				var portNames = SerialPort.GetPortNames();
 				var ports = searcher.Get().Cast<ManagementBaseObject>().ToList();
 
 				foreach (var name in portNames)
 				{
-					var port = ports.FirstOrDefault(p => String.Equals(p["DeviceID"].ToString(), name));
+					var port = ports.FirstOrDefault(p => p["Name"].ToString().ToUpper().Contains(name.ToUpper()));
 					if (port != null)
 					{
 						result.Add(new ComPort(name, port["Caption"].ToString()));
+					}
+					else
+					{
+						result.Add(new ComPort(name, name));
 					}
 				}
 			}
@@ -160,7 +164,7 @@ namespace BBSFW.Model
 		private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
 		{
 			// check for communication error and reset
-			if (_rxBuffer.Any() && DateTime.Now - _lastRecv > TimeSpan.FromMilliseconds(100))
+			if (_rxBuffer.Any() && DateTime.Now - _lastRecv > TimeSpan.FromMilliseconds(1000))
 			{
 				_rxBuffer.Clear();
 			}
@@ -200,23 +204,32 @@ namespace BBSFW.Model
 		{
 			lock(_rxBuffer)
 			{
-				var result = ProcessMessage();
-				if (result == Discard)
+				while(true)
 				{
-					System.Diagnostics.Debug.WriteLine("Discarding: " + BitConverter.ToString(_rxBuffer.ToArray()).Replace("-", " "));
-					_rxBuffer.Clear();
-				}
-				else if (result > 0)
-				{
-					if (_rxBuffer.Count > result)
+					var result = ProcessMessage();
+					if (result == Discard)
 					{
-						_rxBuffer.RemoveRange(0, result);
+						System.Diagnostics.Debug.WriteLine("Discarding: " + BitConverter.ToString(_rxBuffer.ToArray()).Replace("-", " "));
+						_rxBuffer.Clear();
+					}
+					else if (result > 0)
+					{
+						if (_rxBuffer.Count > result)
+						{
+							_rxBuffer.RemoveRange(0, result);
+						}
+						else
+						{
+							_rxBuffer.Clear();
+						}
 					}
 					else
 					{
-						_rxBuffer.Clear();
+						// no data, done
+						break;
 					}
 				}
+				
 			}
 		}
 
@@ -317,6 +330,7 @@ namespace BBSFW.Model
 
 				if (version != Configuration.Version || size != Configuration.ByteSize)
 				{
+					System.Diagnostics.Debug.WriteLine("Config read from flash has wrong version, discarding.");
 					return Discard;
 				}
 			}
@@ -332,6 +346,10 @@ namespace BBSFW.Model
 				cfg.ParseFromBuffer(_rxBuffer.Skip(4).Take(Configuration.ByteSize).ToArray());
 
 				_readConfigCq.Complete(cfg);
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine("Config read from flash has mismatching checksum, discarding.");
 			}
 
 			return MessageSize;

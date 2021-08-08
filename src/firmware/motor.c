@@ -418,4 +418,3 @@ static void read_status()
 		battery_volt_x10 = (value * 10) / 14;
 	}
 }
-

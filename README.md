@@ -1,5 +1,8 @@
 # BBSHD Open Source Firmware
 
+**NOT READY FOR EVERYDAY USE**
+
+
 Work in progress for bringing life to an open source firmware for the BBSHD motor controller.
 
 Soon to be released. Check wiki for more documentation.  
@@ -28,7 +31,6 @@ https://github.com/danielnilsson9/bbshd-fw/wiki/Configuration-Tool
 
 ## Limitations
 * No battery SOC calculation, set display to show battery voltage instead.
-* No way to limit PAS cadence at the moment.
 * No range estimation, the range field on the display will show motor temperature instead.
 
 ## Supported Hardware Revisions
